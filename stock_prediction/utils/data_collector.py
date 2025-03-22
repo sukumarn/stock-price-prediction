@@ -2,7 +2,13 @@ import yfinance as yf
 import pandas as pd
 import os
 from datetime import datetime
-from ..config.config import DATA_CONFIG, RAW_DATA_DIR
+import sys
+import os
+
+# Add the project root directory to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from stock_prediction.config.config import DATA_CONFIG, RAW_DATA_DIR
 
 class StockDataCollector:
     def __init__(self, symbol):

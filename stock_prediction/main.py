@@ -1,12 +1,18 @@
 import argparse
-from utils.data_collector import StockDataCollector
-from utils.technical_indicators import TechnicalIndicator
-from utils.news_analyzer import NewsAnalyzer
-from models.lstm_model import StockPredictor
-from utils.visualizer import StockVisualizer
+import sys
+import os
 import logging
 import pandas as pd
 from datetime import datetime
+
+# Add the project root directory to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from stock_prediction.utils.data_collector import StockDataCollector
+from stock_prediction.utils.technical_indicators import TechnicalIndicator
+from stock_prediction.utils.news_analyzer import NewsAnalyzer
+from stock_prediction.models.lstm_model import StockPredictor
+from stock_prediction.utils.visualizer import StockVisualizer
 
 def analyze_stock(symbol: str, retrain: bool = False):
     """
@@ -45,6 +51,7 @@ def analyze_stock(symbol: str, retrain: bool = False):
     
     # Save results
     output_dir = "output"
+    os.makedirs(output_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     # Save sentiment analysis
