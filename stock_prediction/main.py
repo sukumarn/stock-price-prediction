@@ -1,88 +1,81 @@
 import argparse
-from datetime import datetime
-import pandas as pd
 from utils.data_collector import StockDataCollector
-from utils.technical_indicators import TechnicalIndicators
+from utils.technical_indicators import TechnicalIndicator
+from utils.news_analyzer import NewsAnalyzer
 from models.lstm_model import StockPredictor
 from utils.visualizer import StockVisualizer
+import logging
 
-def predict_stock(symbol, retrain=False):
-    """Run the complete stock prediction pipeline"""
-    print(f"\nStarting prediction pipeline for {symbol}")
-    print("=" * 50)
+def analyze_stock(symbol: str, retrain: bool = False):
+    """
+    Analyze stock with price predictions and news sentiment
+    """
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
     
-    # 1. Data Collection
-    print("\n1. Collecting stock data...")
-    collector = StockDataCollector(symbol)
-    df = collector.fetch_data()
+    # Initialize components
+    logger.info(f"\nAnalyzing {symbol}...")
+    data_collector = StockDataCollector(symbol)
+    news_analyzer = NewsAnalyzer(symbol)
     
-    if df is None or df.empty:
-        print(f"Error: Could not fetch data for {symbol}")
+    # Collect data and perform technical analysis
+    df = data_collector.fetch_data()
+    if df is None:
+        logger.error(f"Failed to fetch data for {symbol}")
         return
+        
+    # Get stock information
+    stock_info = data_collector.get_stock_info()
     
-    # 2. Calculate Technical Indicators
-    print("\n2. Calculating technical indicators...")
-    ti = TechnicalIndicators(df)
-    df = ti.calculate_all()
+    # Calculate technical indicators
+    tech_ind = TechnicalIndicator(df)
+    df = tech_ind.calculate_all_indicators()
     
-    # 3. Prepare Predictor
-    print("\n3. Preparing prediction model...")
-    predictor = StockPredictor(symbol)
+    # Perform price prediction
+    predictor = StockPredictor(df)
+    if retrain:
+        predictor.train()
+    predictions = predictor.predict_next_days(5)
     
-    # Check if we should retrain or load existing models
-    if not retrain and predictor.load_models():
-        print("Loaded existing models")
-    else:
-        print("Training new models...")
-        X, y = predictor.prepare_data(df)
-        predictor.train(X, y)
+    # Get news sentiment analysis
+    sentiment_df = news_analyzer.get_news_sentiment_analysis()
+    trading_signal = news_analyzer.get_trading_signal()
     
-    # 4. Make Predictions
-    print("\n4. Generating predictions...")
-    X, _ = predictor.prepare_data(df)
-    last_sequence = X[-1:]
-    predictions = predictor.predict(last_sequence)
+    # Save results
+    sentiment_df.to_csv(f"output/{symbol}_news_sentiment.csv", index=False)
+    predictions.to_csv(f"output/{symbol}_predictions.csv", index=True)
     
-    # Create predictions DataFrame
-    future_dates = pd.date_range(
-        start=df.index[-1] + pd.Timedelta(days=1),
-        periods=len(predictions),
-        freq='D'
-    )
+    # Print analysis summary
+    logger.info("\n=== Stock Analysis Summary ===")
+    logger.info(f"\nStock: {stock_info.get('longName', symbol)} ({symbol})")
+    logger.info(f"Current Price: ${stock_info.get('currentPrice', 'N/A')}")
+    logger.info(f"52 Week Range: ${stock_info.get('fiftyTwoWeekLow', 'N/A')} - ${stock_info.get('fiftyTwoWeekHigh', 'N/A')}")
     
-    predictions_df = pd.DataFrame({
-        'Date': future_dates,
-        'Predicted_Close': [p['mean'] for p in predictions],
-        'Lower_Bound': [p['lower'] for p in predictions],
-        'Upper_Bound': [p['upper'] for p in predictions]
-    })
-    predictions_df.set_index('Date', inplace=True)
+    logger.info("\n=== Technical Indicators ===")
+    logger.info(f"RSI (14): {tech_ind.get_current_rsi():.2f}")
+    logger.info(f"MACD: {tech_ind.get_current_macd():.2f}")
     
-    # 5. Visualize Results
-    print("\n5. Creating visualizations...")
-    visualizer = StockVisualizer(symbol)
-    visualizer.plot_predictions(df, predictions_df)
-    visualizer.plot_technical_indicators(df)
-    visualizer.save_predictions_to_csv(predictions_df)
+    logger.info("\n=== Price Predictions ===")
+    for date, row in predictions.iterrows():
+        logger.info(f"{date.strftime('%Y-%m-%d')}: ${row['Predicted_Price']:.2f} (Confidence: {row['Confidence']:.2%})")
     
-    # 6. Generate Report
-    print("\n6. Generating summary report...")
-    report = visualizer.create_summary_report(df, predictions_df)
-    print("\nSummary Report:")
-    print(report)
+    logger.info("\n=== News Sentiment Analysis ===")
+    logger.info(f"Average Sentiment Score: {sentiment_df['Sentiment_Score'].mean():.2f}")
+    logger.info(f"Trading Signal based on News: {trading_signal}")
     
-    print("\nPrediction pipeline completed!")
-    print(f"Check the 'output' directory for {symbol}_predictions.png, {symbol}_technical.png, and {symbol}_report.txt")
+    logger.info("\n=== Recent News Headlines ===")
+    for _, article in sentiment_df.iterrows():
+        logger.info(f"\nTitle: {article['Title']}")
+        logger.info(f"Sentiment: {article['Sentiment']} (Score: {article['Sentiment_Score']:.2f})")
+        logger.info(f"Link: {article['Link']}")
 
 def main():
-    parser = argparse.ArgumentParser(description='Stock Price Prediction')
-    parser.add_argument('symbols', nargs='+', help='Stock symbols to predict (e.g., SBIN.NS RELIANCE.NS)')
-    parser.add_argument('--retrain', action='store_true', help='Force retraining of models')
+    parser = argparse.ArgumentParser(description='Stock Analysis with Price Prediction and News Sentiment')
+    parser.add_argument('symbol', type=str, help='Stock symbol (e.g., AAPL, GOOGL)')
+    parser.add_argument('--retrain', action='store_true', help='Retrain the prediction model')
     
     args = parser.parse_args()
-    
-    for symbol in args.symbols:
-        predict_stock(symbol, args.retrain)
+    analyze_stock(args.symbol, args.retrain)
 
 if __name__ == "__main__":
     main() 
