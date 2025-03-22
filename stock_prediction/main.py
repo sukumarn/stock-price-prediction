@@ -5,10 +5,12 @@ from utils.news_analyzer import NewsAnalyzer
 from models.lstm_model import StockPredictor
 from utils.visualizer import StockVisualizer
 import logging
+import pandas as pd
+from datetime import datetime
 
 def analyze_stock(symbol: str, retrain: bool = False):
     """
-    Analyze stock with price predictions and news sentiment
+    Analyze stock with price predictions and enhanced news sentiment
     """
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
@@ -37,15 +39,23 @@ def analyze_stock(symbol: str, retrain: bool = False):
         predictor.train()
     predictions = predictor.predict_next_days(5)
     
-    # Get news sentiment analysis
+    # Get enhanced news sentiment analysis
     sentiment_df = news_analyzer.get_news_sentiment_analysis()
-    trading_signal = news_analyzer.get_trading_signal()
+    trading_signal, signal_confidence = news_analyzer.get_trading_signal()
     
     # Save results
-    sentiment_df.to_csv(f"output/{symbol}_news_sentiment.csv", index=False)
-    predictions.to_csv(f"output/{symbol}_predictions.csv", index=True)
+    output_dir = "output"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    # Print analysis summary
+    # Save sentiment analysis
+    sentiment_file = f"{output_dir}/{symbol}_news_sentiment_{timestamp}.csv"
+    sentiment_df.to_csv(sentiment_file, index=False)
+    
+    # Save predictions
+    predictions_file = f"{output_dir}/{symbol}_predictions_{timestamp}.csv"
+    predictions.to_csv(predictions_file, index=True)
+    
+    # Print comprehensive analysis summary
     logger.info("\n=== Stock Analysis Summary ===")
     logger.info(f"\nStock: {stock_info.get('longName', symbol)} ({symbol})")
     logger.info(f"Current Price: ${stock_info.get('currentPrice', 'N/A')}")
@@ -60,17 +70,37 @@ def analyze_stock(symbol: str, retrain: bool = False):
         logger.info(f"{date.strftime('%Y-%m-%d')}: ${row['Predicted_Price']:.2f} (Confidence: {row['Confidence']:.2%})")
     
     logger.info("\n=== News Sentiment Analysis ===")
-    logger.info(f"Average Sentiment Score: {sentiment_df['Sentiment_Score'].mean():.2f}")
-    logger.info(f"Trading Signal based on News: {trading_signal}")
+    logger.info(f"Trading Signal: {trading_signal} (Confidence: {signal_confidence:.2%})")
     
-    logger.info("\n=== Recent News Headlines ===")
+    # Calculate sentiment statistics
+    sentiment_stats = {
+        'Very Positive': len(sentiment_df[sentiment_df['Sentiment'] == 'Very Positive']),
+        'Positive': len(sentiment_df[sentiment_df['Sentiment'] == 'Positive']),
+        'Neutral': len(sentiment_df[sentiment_df['Sentiment'] == 'Neutral']),
+        'Negative': len(sentiment_df[sentiment_df['Sentiment'] == 'Negative']),
+        'Very Negative': len(sentiment_df[sentiment_df['Sentiment'] == 'Very Negative'])
+    }
+    
+    logger.info("\nSentiment Distribution:")
+    for sentiment, count in sentiment_stats.items():
+        logger.info(f"{sentiment}: {count}")
+    
+    logger.info("\n=== Recent News Analysis ===")
     for _, article in sentiment_df.iterrows():
-        logger.info(f"\nTitle: {article['Title']}")
-        logger.info(f"Sentiment: {article['Sentiment']} (Score: {article['Sentiment_Score']:.2f})")
+        logger.info(f"\nSource: {article['Source']}")
+        logger.info(f"Title: {article['Title']}")
+        logger.info(f"Date: {article['Date'].strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"Sentiment: {article['Sentiment']}")
+        logger.info(f"Confidence: {article['Confidence']:.2%}")
+        logger.info(f"Intensity: {article['Intensity']:.2f}")
         logger.info(f"Link: {article['Link']}")
+    
+    logger.info(f"\nDetailed analysis saved to:")
+    logger.info(f"1. Sentiment Analysis: {sentiment_file}")
+    logger.info(f"2. Price Predictions: {predictions_file}")
 
 def main():
-    parser = argparse.ArgumentParser(description='Stock Analysis with Price Prediction and News Sentiment')
+    parser = argparse.ArgumentParser(description='Stock Analysis with Price Prediction and Enhanced News Sentiment')
     parser.add_argument('symbol', type=str, help='Stock symbol (e.g., AAPL, GOOGL)')
     parser.add_argument('--retrain', action='store_true', help='Retrain the prediction model')
     
