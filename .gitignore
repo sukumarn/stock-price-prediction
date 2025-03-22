@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+.idea/
+.vscode/
+stock_prediction/data/raw/*
+stock_prediction/data/processed/*
+stock_prediction/models/*
+stock_prediction/output/*
